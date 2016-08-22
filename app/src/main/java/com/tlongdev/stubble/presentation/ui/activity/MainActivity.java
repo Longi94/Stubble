@@ -1,9 +1,10 @@
-package com.tlongdev.stubble;
+package com.tlongdev.stubble.presentation.ui.activity;
 
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
-public class MainActivity extends AppCompatActivity {
+import com.tlongdev.stubble.R;
+
+public class MainActivity extends StubbleActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
