@@ -2,6 +2,8 @@
 <manifest package="com.tlongdev.stubble"
           xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".StubbleApplication"
         android:allowBackup="true"
@@ -16,6 +18,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".presentation.ui.activity.LoginActivity"
+            android:label="@string/title_activity_login"
+            android:parentActivityName=".presentation.ui.activity.MainActivity"
+            android:theme="@style/AppTheme">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.tlongdev.stubble.presentation.ui.activity.MainActivity"/>
+        </activity>
+
+        <service
+            android:name=".service.SteamCallbackService"
+            android:enabled="true"
+            android:exported="false">
+        </service>
     </application>
 
 </manifest>
