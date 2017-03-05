@@ -1,6 +1,7 @@
 package com.tlongdev.stubble;
 
 import android.app.Application;
+import android.content.Context;
 import android.util.Log;
 
 import com.tlongdev.stubble.presentation.module.AppModule;
@@ -14,9 +15,12 @@ import uk.co.thomasc.steamkit.util.logging.IDebugListener;
  */
 public class StubbleApplication extends Application {
 
+    private static Context context;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        context = getApplicationContext();
 
         AppModule appModule = new AppModule(this);
 
@@ -26,5 +30,9 @@ public class StubbleApplication extends Application {
                 Log.d(category, message);
             }
         });
+    }
+
+    public static Context getAppContext() {
+        return context;
     }
 }

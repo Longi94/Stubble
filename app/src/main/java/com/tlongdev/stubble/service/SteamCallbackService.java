@@ -1,6 +1,5 @@
 package com.tlongdev.stubble.service;
 
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Handler;
@@ -9,14 +8,16 @@ import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 import com.tlongdev.stubble.R;
-import com.tlongdev.stubble.presentation.ui.activity.MainActivity;
 import com.tlongdev.stubble.service.callback.SteamConnectionCallback;
+import com.tlongdev.stubble.service.callback.SteamLogonCallback;
 import com.tlongdev.stubble.steam.SteamConnection;
 
 import java.util.Timer;
 import java.util.TimerTask;
 
 import uk.co.thomasc.steamkit.base.generated.steamlanguage.EResult;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoggedOnCallback;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoginKeyCallback;
 import uk.co.thomasc.steamkit.steam3.steamclient.SteamClient;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbackmgr.CallbackMsg;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.ConnectedCallback;
@@ -30,6 +31,7 @@ public class SteamCallbackService extends Service {
     public static final int SERVICE_NOTIFICATION_ID = 100;
 
     public static SteamConnectionCallback connectionCallback;
+    public static SteamLogonCallback logonCallback;
 
     public static boolean running = false;
 
@@ -61,15 +63,15 @@ public class SteamCallbackService extends Service {
             mTimerRunning = true;
         }
 
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        //Intent notificationIntent = new Intent(this, MainActivity.class);
+        //PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
         builder.setSmallIcon(R.mipmap.ic_launcher);
         builder.setContentTitle("Steam Bubble");
         builder.setTicker("Steam Bubble");
         builder.setWhen(System.currentTimeMillis());
         builder.setContentText("Service running...");
-        builder.setContentIntent(pendingIntent);
+        //builder.setContentIntent(pendingIntent);
         builder.setPriority(NotificationCompat.PRIORITY_MIN);
         startForeground(SERVICE_NOTIFICATION_ID, builder.build());
 
@@ -99,12 +101,13 @@ public class SteamCallbackService extends Service {
     }
 
     private void handleSteamMessage(CallbackMsg message) {
+        Log.d(LOG_TAG, "handleSteamMessage: " + message.getClass().getSimpleName());
 
         message.handle(ConnectedCallback.class, new ActionT<ConnectedCallback>() {
             @Override
-            public void call(ConnectedCallback connectedCallback) {
-                Log.d(LOG_TAG, "Connected to steam, status: " + connectedCallback.getResult());
-                if (connectedCallback.getResult() == EResult.OK) {
+            public void call(ConnectedCallback callback) {
+                Log.d(LOG_TAG, "Connected to steam, status: " + callback.getResult());
+                if (callback.getResult() == EResult.OK) {
                     if (connectionCallback != null) {
                         mHandler.post(new Runnable() {
                             @Override
@@ -128,7 +131,7 @@ public class SteamCallbackService extends Service {
 
         message.handle(DisconnectedCallback.class, new ActionT<DisconnectedCallback>() {
             @Override
-            public void call(DisconnectedCallback disconnectedCallback) {
+            public void call(DisconnectedCallback callback) {
                 Log.d(LOG_TAG, "Disconnected from steam network: ");
                 if (connectionCallback != null) {
                     mHandler.post(new Runnable() {
@@ -139,6 +142,45 @@ public class SteamCallbackService extends Service {
                     });
                 }
                 stopSelf();
+            }
+        });
+
+        message.handle(LoggedOnCallback.class, new ActionT<LoggedOnCallback>() {
+            @Override
+            public void call(final LoggedOnCallback callback) {
+                if (logonCallback != null) {
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            EResult result = callback.getResult();
+                            switch (result) {
+                                case OK:
+                                    logonCallback.onLogonSuccessful();
+                                    break;
+                                case InvalidPassword:
+                                    logonCallback.onLogonInvalidPassword();
+                                    break;
+                                case AccountLogonDenied:
+                                case AccountLogonDeniedNoMail:
+                                case AccountLogonDeniedVerifiedEmailRequired:
+                                case AccountLoginDeniedNeedTwoFactor:
+                                    logonCallback.onLogonSteamGuardRequired(result == EResult.AccountLoginDeniedNeedTwoFactor);
+                                    break;
+                                case InvalidLoginAuthCode:
+                                case TwoFactorCodeMismatch:
+                                    logonCallback.onLogonSteamGuardFailed(result == EResult.TwoFactorCodeMismatch);
+                                default:
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
+        message.handle(LoginKeyCallback.class, new ActionT<LoginKeyCallback>() {
+            @Override
+            public void call(LoginKeyCallback callback) {
+
             }
         });
     }
