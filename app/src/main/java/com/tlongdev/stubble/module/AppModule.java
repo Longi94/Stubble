@@ -1,4 +1,4 @@
-package com.tlongdev.stubble.presentation.module;
+package com.tlongdev.stubble.module;
 
 import android.app.Application;
 import android.content.Context;

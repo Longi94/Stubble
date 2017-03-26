@@ -11,14 +11,20 @@ import com.tlongdev.stubble.R;
 import com.tlongdev.stubble.service.callback.SteamConnectionCallback;
 import com.tlongdev.stubble.service.callback.SteamLogonCallback;
 import com.tlongdev.stubble.steam.SteamConnection;
+import com.tlongdev.stubble.steam.SteamCredentials;
 
 import java.util.Timer;
 import java.util.TimerTask;
 
+import uk.co.thomasc.steamkit.base.generated.steamlanguage.EChatEntryType;
 import uk.co.thomasc.steamkit.base.generated.steamlanguage.EResult;
+import uk.co.thomasc.steamkit.steam3.handlers.steamfriends.callbacks.FriendMsgCallback;
+import uk.co.thomasc.steamkit.steam3.handlers.steamfriends.callbacks.FriendMsgEchoCallback;
+import uk.co.thomasc.steamkit.steam3.handlers.steamfriends.callbacks.FriendMsgHistoryCallback;
+import uk.co.thomasc.steamkit.steam3.handlers.steamnotifications.callbacks.NotificationOfflineMsgCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoggedOnCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoginKeyCallback;
-import uk.co.thomasc.steamkit.steam3.steamclient.SteamClient;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.types.LogOnDetails;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbackmgr.CallbackMsg;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.ConnectedCallback;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.DisconnectedCallback;
@@ -35,7 +41,7 @@ public class SteamCallbackService extends Service {
 
     public static boolean running = false;
 
-    private SteamClient mSteamClient;
+    private SteamConnection mSteamConnection;
     private Timer mCallbackTimer;
 
     private boolean mTimerRunning = false;
@@ -45,7 +51,7 @@ public class SteamCallbackService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        mSteamClient = SteamConnection.getInstance().getSteamClient();
+        mSteamConnection = SteamConnection.getInstance();
 
         mHandler = new Handler();
     }
@@ -180,7 +186,89 @@ public class SteamCallbackService extends Service {
         message.handle(LoginKeyCallback.class, new ActionT<LoginKeyCallback>() {
             @Override
             public void call(LoginKeyCallback callback) {
+                Log.d(LOG_TAG, "Got loginkey " + callback.getLoginKey() + "| uniqueid: " + callback.getUniqueId());
 
+                LogOnDetails logOnDetails = mSteamConnection.getLogOnDetails();
+                if (logOnDetails.shouldRememberPassword) {
+                    Log.d(LOG_TAG, "Saving login credentials");
+
+                    SteamCredentials credentials = new SteamCredentials();
+                    credentials.setUsername(logOnDetails.username);
+                    credentials.setLoginKey(callback.getLoginKey());
+                    credentials.setUniqueId(callback.getUniqueId());
+                    SteamCredentials.saveCredentials(getApplicationContext(), credentials);
+                }
+            }
+        });
+
+        message.handle(FriendMsgCallback.class, new ActionT<FriendMsgCallback>() {
+            @Override
+            public void call(FriendMsgCallback callback) {
+                final EChatEntryType type = callback.getEntryType();
+
+                if (!callback.getSender().equals(mSteamConnection.getSteamClient().getSteamId())) {
+                    if (type == EChatEntryType.ChatMsg) {
+
+                    }
+                }
+            }
+        });
+
+        // echoed message from another instance
+        message.handle(FriendMsgEchoCallback.class, new ActionT<FriendMsgEchoCallback>() {
+            @Override
+            public void call(FriendMsgEchoCallback callback) {
+                // we log it:
+                if (callback.getEntryType() == EChatEntryType.ChatMsg) {
+                    /*chatManager.broadcastMessage(
+                            System.currentTimeMillis(),
+                            steamClient.getSteamId(),
+                            callback.getRecipient(),
+                            true,
+                            SteamChatManager.CHAT_TYPE_CHAT,
+                            callback.getMessage()
+                    );*/
+                }
+            }
+        });
+
+        message.handle(FriendMsgHistoryCallback.class, new ActionT<FriendMsgHistoryCallback>() {
+            @Override
+            public void call(FriendMsgHistoryCallback callback) {
+                // add all messages that are "unread" to our internal database
+                // problem though... Steam send us *all messages* as unread since we last
+                // requested history... perhaps we should request history
+                // when we get a message. that way we confirm we read the message
+                // SOLUTION: record the time that we log in. If this time is after that, ignore it
+                if (callback.getSuccess() > 0) {
+                    /*SteamID otherId = callback.getSteamId();
+                    SteamID ourId = steamClient.getSteamId();
+                    for (FriendMsg msg : callback.getMessages()) {
+                        if (!msg.isUnread())
+                            continue;
+                        if ((msg.getTimestamp() * 1000L) > timeLogin)
+                            continue;
+                        boolean sent_by_us = !msg.getSender().equals(otherId);
+                        // potentially check for if it's been read already
+                        chatManager.broadcastMessage(
+                                msg.getTimestamp() * 1000, // seconds --> millis
+                                ourId,
+                                otherId,
+                                sent_by_us,
+                                SteamChatManager.CHAT_TYPE_CHAT,
+                                msg.getMessage()
+                        );
+                    }*/
+                }
+            }
+        });
+
+        message.handle(NotificationOfflineMsgCallback.class, new ActionT<NotificationOfflineMsgCallback>() {
+            @Override
+            public void call(NotificationOfflineMsgCallback callback) {
+                Log.d("SteamService", "Notification offline msg: " + callback.getOfflineMessages());
+
+                //chatManager.unreadMessages.addAll(callback.getFriendsWithOfflineMessages());
             }
         });
     }
@@ -188,11 +276,11 @@ public class SteamCallbackService extends Service {
     private class CheckCallbacksTask extends TimerTask {
         @Override
         public void run() {
-            if (mSteamClient == null) {
+            if (mSteamConnection == null) {
                 return;
             }
             while (true) {
-                final CallbackMsg msg = mSteamClient.getCallback(true);
+                final CallbackMsg msg = mSteamConnection.getSteamClient().getCallback(true);
                 if (msg == null) {
                     break;
                 }

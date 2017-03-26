@@ -24,6 +24,7 @@
     </android.support.design.widget.AppBarLayout>
 
     <EditText
+        android:text="longi94asd"
         android:id="@+id/input_username"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -32,6 +33,7 @@
         android:lines="1"/>
 
     <EditText
+        android:text="azvan,1234"
         android:id="@+id/input_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
