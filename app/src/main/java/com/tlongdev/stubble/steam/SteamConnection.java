@@ -3,7 +3,10 @@ package com.tlongdev.stubble.steam;
 import android.util.Log;
 
 import com.tlongdev.stubble.StubbleApplication;
+import com.tlongdev.stubble.component.Injector;
 import com.tlongdev.stubble.util.Util;
+
+import javax.inject.Inject;
 
 import uk.co.thomasc.steamkit.base.generated.steamlanguage.EResult;
 import uk.co.thomasc.steamkit.steam3.handlers.steamchat.SteamChat;
@@ -11,6 +14,7 @@ import uk.co.thomasc.steamkit.steam3.handlers.steamfriends.SteamFriends;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.SteamUser;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoggedOnCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.types.LogOnDetails;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.types.MachineAuthDetails;
 import uk.co.thomasc.steamkit.steam3.steamclient.SteamClient;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbackmgr.CallbackMsg;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.ConnectedCallback;
@@ -28,14 +32,14 @@ public class SteamConnection {
 
     private static SteamConnection ourInstance;
 
-    public static SteamConnection getInstance() {
+    public static SteamConnection getInstance(Injector injector) {
         if (ourInstance == null) {
-            ourInstance = new SteamConnection();
+            ourInstance = new SteamConnection(injector);
         }
         return ourInstance;
     }
 
-    private SteamClient mSteamClient;
+    @Inject SteamClient mSteamClient;
 
     private SteamUser mSteamUser;
     private SteamFriends mSteamFriends;
@@ -46,8 +50,8 @@ public class SteamConnection {
 
     private LogOnDetails mLogOnDetails;
 
-    private SteamConnection() {
-        mSteamClient = new SteamClient();
+    private SteamConnection(Injector injector) {
+        injector.inject(this);
 
         mSteamUser = mSteamClient.getHandler(SteamUser.class);
         mSteamFriends = mSteamClient.getHandler(SteamFriends.class);
@@ -115,5 +119,9 @@ public class SteamConnection {
             Log.d(LOG_TAG, "steam id: " + steamID.render());
         }
         return null;
+    }
+
+    public void sendMachineAuthResponse(MachineAuthDetails auth) {
+        mSteamUser.sendMachineAuthResponse(auth);
     }
 }

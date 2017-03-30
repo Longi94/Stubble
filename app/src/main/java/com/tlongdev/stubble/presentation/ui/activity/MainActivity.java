@@ -1,6 +1,7 @@
 package com.tlongdev.stubble.presentation.ui.activity;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -14,10 +15,13 @@ import butterknife.ButterKnife;
 
 public class MainActivity extends StubbleActivity {
 
+    private static final String LOG_TAG = MainActivity.class.getSimpleName();
+
     @Inject SteamConnection mSteamConnection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.d(LOG_TAG, "onCreate: ");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
@@ -27,12 +31,14 @@ public class MainActivity extends StubbleActivity {
 
     @Override
     protected void onStart() {
+        Log.d(LOG_TAG, "onStart: ");
         super.onStart();
         mSteamConnection.getFriends();
     }
 
     @Override
     protected void onStop() {
+        Log.d(LOG_TAG, "onStop: ");
         super.onStop();
     }
 

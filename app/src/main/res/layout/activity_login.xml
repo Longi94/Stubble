@@ -24,7 +24,6 @@
     </android.support.design.widget.AppBarLayout>
 
     <EditText
-        android:text="longi94asd"
         android:id="@+id/input_username"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -33,7 +32,6 @@
         android:lines="1"/>
 
     <EditText
-        android:text="azvan,1234"
         android:id="@+id/input_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -41,16 +39,17 @@
         android:inputType="textPassword"
         android:lines="1"/>
 
+    <CheckBox
+        android:id="@+id/input_remember"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="Rememver meee!"/>
+
     <Button
         android:id="@+id/login"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Login"/>
-
-    <Button
-        android:id="@+id/disconnect"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Disconnect"/>
 
 </LinearLayout>

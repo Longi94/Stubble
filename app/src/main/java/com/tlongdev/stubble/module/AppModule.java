@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 
+import com.google.gson.Gson;
+
 import javax.inject.Singleton;
 
 import dagger.Module;
@@ -44,5 +46,11 @@ public class AppModule {
     @Singleton
     SharedPreferences.Editor provideEditor(SharedPreferences preferences) {
         return preferences.edit();
+    }
+
+    @Provides
+    @Singleton
+    Gson gson() {
+        return new Gson();
     }
 }

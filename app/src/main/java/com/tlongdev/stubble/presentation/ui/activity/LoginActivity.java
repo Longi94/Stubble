@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -15,8 +16,14 @@ import com.tlongdev.stubble.R;
 import com.tlongdev.stubble.service.SteamCallbackService;
 import com.tlongdev.stubble.service.callback.SteamConnectionCallback;
 import com.tlongdev.stubble.service.callback.SteamLogonCallback;
+import com.tlongdev.stubble.steam.SentryManager;
 import com.tlongdev.stubble.steam.SteamConnection;
 import com.tlongdev.stubble.steam.SteamCredentials;
+import com.tlongdev.stubble.util.Util;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 
 import javax.inject.Inject;
 
@@ -31,10 +38,12 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
     private static final String LOG_TAG = LoginActivity.class.getSimpleName();
 
     @Inject SteamConnection mSteamConnection;
+    @Inject SentryManager mSentryManager;
 
     @BindView(R.id.toolbar) Toolbar mToolbar;
     @BindView(R.id.input_username) EditText mInputUsername;
     @BindView(R.id.input_password) EditText mInputPassword;
+    @BindView(R.id.input_remember) CheckBox mInputRemember;
 
     private ProgressDialog mProgressDialog;
 
@@ -60,18 +69,23 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
         SteamCallbackService.logonCallback = this;
         SteamCallbackService.connectionCallback = this;
         startService(new Intent(this, SteamCallbackService.class));
-        if (mSteamConnection.isConnected()) {
-            if (mSteamConnection.isLoggedOn()) {
-                startActivity(new Intent(this, MainActivity.class));
-            } else if (SteamCredentials.areCredentialsSaved(this)) {
-                SteamCredentials credentials = SteamCredentials.getCredentials(this);
-                LogOnDetails logOnDetails = new LogOnDetails()
-                        .username(credentials.getUsername());
-
-                logOnDetails.loginkey = credentials.getLoginKey();
-
-                new LogonTask().execute(logOnDetails);
-                mProgressDialog = ProgressDialog.show(this, null, "Loggin in...", true, false);
+        if (SteamCredentials.areCredentialsSaved(this)) {
+            if (mSteamConnection.isConnected()) {
+                if (!mSteamConnection.isLoggedOn()) {
+                    attemptLogonWithCredentials();
+                    mProgressDialog = ProgressDialog.show(this, null, "Loggin in...", true, false);
+                } else {
+                    nextActivity();
+                }
+            } else {
+                new ConnectTask().execute();
+                mProgressDialog = ProgressDialog.show(this, null, "Connecting to steam...", true, false);
+            }
+        } else {
+            if (mSteamConnection.isConnected()) {
+                if (mSteamConnection.isLoggedOn()) {
+                    nextActivity();
+                }
             }
         }
     }
@@ -88,9 +102,8 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
     public void login() {
         Log.d(LOG_TAG, "login: ");
         startService(new Intent(this, SteamCallbackService.class));
-        if (!SteamConnection.getInstance().isConnected()) {
+        if (!mSteamConnection.isConnected()) {
             new ConnectTask().execute();
-
             mProgressDialog = ProgressDialog.show(this, null, "Connecting to steam...", true, false);
         } else {
             mProgressDialog = ProgressDialog.show(this, null, "Logging in...", true, false);
@@ -98,19 +111,28 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
         }
     }
 
-    @OnClick(R.id.disconnect)
+    /*@OnClick(R.id.disconnect)
     public void disconnect() {
         Log.d(LOG_TAG, "disconnect: ");
-        if (SteamConnection.getInstance().isConnected()) {
+        if (mSteamConnection.isConnected()) {
             new DisconnectTask().execute();
             mProgressDialog = ProgressDialog.show(this, null, "Disconnecting to steam...", true, false);
         }
+    }*/
+
+    private void nextActivity() {
+        Intent intent = new Intent(this, MainActivity.class);
+        //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        finish();
     }
 
     private void attemptLogon() {
         LogOnDetails details = new LogOnDetails()
                 .username(mInputUsername.getText().toString())
                 .password(mInputPassword.getText().toString());
+
+        details.shouldRememberPassword = mInputRemember.isChecked();
 
         if (mGuardCode != null) {
             if (mTwoFactor) {
@@ -119,8 +141,41 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
                 details.authCode(mGuardCode);
             }
         }
-        SteamConnection.getInstance().setLogOnDetails(details);
+        addSentryHash(details);
+        mSteamConnection.setLogOnDetails(details);
         new LogonTask().execute(details);
+    }
+
+    private void attemptLogonWithCredentials() {
+        SteamCredentials credentials = SteamCredentials.getCredentials(this);
+        LogOnDetails details = new LogOnDetails().username(credentials.getUsername());
+
+        details.shouldRememberPassword = true;
+        details.loginkey = credentials.getLoginKey();
+
+        addSentryHash(details);
+        mSteamConnection.setLogOnDetails(details);
+        new LogonTask().execute(details);
+    }
+
+    private void addSentryHash(LogOnDetails logOnDetails) {
+        String sentryName = mSentryManager.getSentryFileName(logOnDetails.username);
+
+        if (sentryName == null) {
+            return;
+        }
+
+        try {
+            File file = new File(getFilesDir(), sentryName);
+            RandomAccessFile f = new RandomAccessFile(file, "r");
+            byte[] bytes = new byte[(int) f.length()];
+            f.readFully(bytes);
+            f.close();
+
+            logOnDetails.sentryFileHash = Util.sha1(bytes);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -129,7 +184,11 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
         if (mProgressDialog != null) {
             mProgressDialog.setMessage("Logging in...");
         }
-        attemptLogon();
+        if (SteamCredentials.areCredentialsSaved(this)) {
+            attemptLogonWithCredentials();
+        } else {
+            attemptLogon();
+        }
     }
 
     @Override
@@ -177,7 +236,7 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
             mProgressDialog = null;
         }
 
-        startActivity(new Intent(this, MainActivity.class));
+        nextActivity();
     }
 
     @Override
@@ -240,7 +299,7 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
                     e.printStackTrace();
                 }
             }
-            SteamConnection.getInstance().connect();
+            mSteamConnection.connect();
             return null;
         }
     }
@@ -248,7 +307,7 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
     private class DisconnectTask extends AsyncTask<Void, Void, Void> {
         @Override
         protected Void doInBackground(Void... voids) {
-            SteamConnection.getInstance().disconnect();
+            mSteamConnection.disconnect();
             return null;
         }
     }
@@ -256,7 +315,7 @@ public class LoginActivity extends StubbleActivity implements SteamLogonCallback
     private class LogonTask extends AsyncTask<LogOnDetails, Void, Void> {
         @Override
         protected Void doInBackground(LogOnDetails... logOnDetails) {
-            SteamConnection.getInstance().logon(logOnDetails[0]);
+            mSteamConnection.logon(logOnDetails[0]);
             return null;
         }
     }

@@ -1,6 +1,7 @@
 package com.tlongdev.stubble.service;
 
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.IBinder;
@@ -8,13 +9,20 @@ import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 import com.tlongdev.stubble.R;
+import com.tlongdev.stubble.StubbleApplication;
 import com.tlongdev.stubble.service.callback.SteamConnectionCallback;
 import com.tlongdev.stubble.service.callback.SteamLogonCallback;
+import com.tlongdev.stubble.steam.SentryManager;
 import com.tlongdev.stubble.steam.SteamConnection;
 import com.tlongdev.stubble.steam.SteamCredentials;
+import com.tlongdev.stubble.util.Util;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import javax.inject.Inject;
 
 import uk.co.thomasc.steamkit.base.generated.steamlanguage.EChatEntryType;
 import uk.co.thomasc.steamkit.base.generated.steamlanguage.EResult;
@@ -24,8 +32,11 @@ import uk.co.thomasc.steamkit.steam3.handlers.steamfriends.callbacks.FriendMsgHi
 import uk.co.thomasc.steamkit.steam3.handlers.steamnotifications.callbacks.NotificationOfflineMsgCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoggedOnCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.LoginKeyCallback;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.callbacks.UpdateMachineAuthCallback;
 import uk.co.thomasc.steamkit.steam3.handlers.steamuser.types.LogOnDetails;
+import uk.co.thomasc.steamkit.steam3.handlers.steamuser.types.MachineAuthDetails;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbackmgr.CallbackMsg;
+import uk.co.thomasc.steamkit.steam3.steamclient.callbackmgr.JobCallback;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.ConnectedCallback;
 import uk.co.thomasc.steamkit.steam3.steamclient.callbacks.DisconnectedCallback;
 import uk.co.thomasc.steamkit.util.cSharp.events.ActionT;
@@ -41,7 +52,9 @@ public class SteamCallbackService extends Service {
 
     public static boolean running = false;
 
-    private SteamConnection mSteamConnection;
+    @Inject SteamConnection mSteamConnection;
+    @Inject SentryManager mSentryManager;
+
     private Timer mCallbackTimer;
 
     private boolean mTimerRunning = false;
@@ -51,7 +64,7 @@ public class SteamCallbackService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        mSteamConnection = SteamConnection.getInstance();
+        ((StubbleApplication) getApplication()).getInjector().inject(this);
 
         mHandler = new Handler();
     }
@@ -131,6 +144,46 @@ public class SteamCallbackService extends Service {
                             }
                         });
                     }
+                }
+            }
+        });
+
+        message.handle(JobCallback.class, new ActionT<JobCallback>() {
+            @Override
+            public void call(JobCallback callback) {
+                if (callback.getCallbackType() == UpdateMachineAuthCallback.class) {
+                    UpdateMachineAuthCallback authCallback =
+                            (UpdateMachineAuthCallback) callback.getCallback();
+
+                    try {
+                        Log.i(LOG_TAG, "Received sentry file: " + authCallback.getFileName());
+
+                        FileOutputStream fos = openFileOutput(authCallback.getFileName(),
+                                Context.MODE_PRIVATE);
+                        fos.write(authCallback.getData());
+                        fos.close();
+
+                        mSentryManager.saveSentryFileName(
+                                mSteamConnection.getLogOnDetails().username,
+                                authCallback.getFileName()
+                        );
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    MachineAuthDetails auth = new MachineAuthDetails();
+                    auth.jobId = callback.getJobId().getValue();
+                    auth.fileName = authCallback.getFileName();
+                    auth.bytesWritten = authCallback.getBytesToWrite();
+                    auth.fileSize = authCallback.getData().length;
+                    auth.offset = authCallback.getOffset();
+                    auth.result = EResult.OK;
+                    auth.lastError = 0;
+                    auth.oneTimePassword = authCallback.getOneTimePassword();
+                    auth.sentryFileHash = Util.sha1(authCallback.getData());
+
+                    mSteamConnection.sendMachineAuthResponse(auth);
                 }
             }
         });
@@ -284,7 +337,7 @@ public class SteamCallbackService extends Service {
                 if (msg == null) {
                     break;
                 }
-                SteamConnection.getInstance().handleCallback(msg);
+                mSteamConnection.handleCallback(msg);
                 handleSteamMessage(msg);
             }
         }
